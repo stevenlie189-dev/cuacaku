@@ -213,16 +213,17 @@ async function loadWeatherData(lat, lon, locationName) {
         renderHourlyForecast(data);
         renderDailyForecast(data);
         renderSunInfo(data);
+
+        // Tampilkan konten terlebih dahulu agar elemen canvas memiliki dimensi lebar/tinggi
+        mainContent.style.display = 'block';
+        mainContent.offsetHeight; // force reflow
+
         drawHourlyChart(data);
         drawDailyChart(data);
 
-        mainContent.style.display = 'block';
-        // Trigger animations
-        mainContent.offsetHeight; // force reflow
-
     } catch (err) {
         console.error('Weather fetch error:', err);
-        alert('Gagal memuat data cuaca. Silakan coba lagi.');
+        alert(`Gagal memuat data cuaca (${err.message || 'Error'}). Silakan coba lagi.`);
     } finally {
         showLoading(false);
     }
