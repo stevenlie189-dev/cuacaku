@@ -1,221 +1,284 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Prakiraan cuaca interaktif real-time dengan visualisasi data cuaca harian dan per jam. Gratis dan akurat menggunakan Open-Meteo API.">
-    <meta name="keywords" content="prakiraan cuaca, weather forecast, cuaca hari ini, ramalan cuaca, cuaca Indonesia">
-    <meta name="author" content="Weather Forecast App">
+    <meta name="description" content="CuacaKu — prakiraan cuaca interaktif real-time: grafik per jam, prakiraan 7 hari, peta interaktif, dan penjelasan cara kerja forecasting cuaca.">
+    <meta name="keywords" content="prakiraan cuaca, weather forecast, cuaca hari ini, ramalan cuaca, cuaca Indonesia, forecasting">
+    <meta name="theme-color" content="#0b1026">
     <title>CuacaKu — Prakiraan Cuaca Interaktif Real-Time</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+    <link rel="stylesheet" href="style.css?v=4">
 </head>
-<body>
-    <!-- Animated Background Particles -->
-    <div class="particles" id="particles"></div>
+<body data-theme="night" class="is-loading" id="top">
+    <div class="bg-gradient" aria-hidden="true"></div>
+    <canvas id="fxCanvas" class="fx-canvas" aria-hidden="true"></canvas>
+    <div class="topbar" aria-hidden="true"></div>
 
-    <!-- Header -->
-    <header class="header">
-        <div class="header-inner">
-            <div class="logo">
-                <span class="logo-icon">🌤️</span>
-                <h1>CuacaKu</h1>
+    <!-- ===== Navigasi ===== -->
+    <nav class="nav">
+        <a class="brand" href="#top" aria-label="CuacaKu">
+            <span class="brand-mark">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41M15.95 12.05A4 4 0 0 0 8.1 11"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"/></svg>
+            </span>
+            <span>Cuaca<b>Ku</b></span>
+        </a>
+
+        <div class="search">
+            <i data-icon="search"></i>
+            <input id="searchInput" type="text" placeholder="Cari kota di seluruh dunia…" autocomplete="off" aria-label="Cari kota">
+            <kbd>/</kbd>
+            <div id="searchResults" class="search-results" role="listbox"></div>
+        </div>
+
+        <div class="nav-actions">
+            <button id="locationBtn" class="icon-btn" title="Gunakan lokasi saya" aria-label="Gunakan lokasi saya"><i data-icon="locate"></i></button>
+            <div class="unit-toggle" id="unitToggle" data-unit="c" role="group" aria-label="Satuan suhu">
+                <span class="pill"></span>
+                <button data-unit="c" class="active">°C</button>
+                <button data-unit="f">°F</button>
             </div>
-            <p class="tagline">Prakiraan Cuaca Interaktif Real-Time</p>
         </div>
-    </header>
+    </nav>
 
-    <!-- Search Section -->
-    <section class="search-section">
-        <div class="search-container">
-            <div class="search-box">
-                <span class="search-icon">🔍</span>
-                <input 
-                    type="text" 
-                    id="searchInput" 
-                    placeholder="Cari kota... (contoh: Jakarta, Bandung, Surabaya)"
-                    autocomplete="off"
-                >
-                <button id="searchBtn" class="search-btn">Cari</button>
-                <button id="locationBtn" class="location-btn" title="Gunakan lokasi saya">📍</button>
+    <div class="chips" id="chips" aria-label="Kota populer"></div>
+
+    <main class="container">
+
+        <!-- ===== Hero: cuaca saat ini ===== -->
+        <section class="hero card" id="hero">
+            <div class="hero-left">
+                <div class="hero-badge"><span class="live-dot"></span> Real-time · diperbarui <span id="updatedAt">--:--</span></div>
+                <h1 class="hero-location"><i data-icon="pin"></i><span id="cityName" class="sk">Memuat lokasi…</span></h1>
+                <p class="hero-time sk" id="localTime">--</p>
+                <div class="hero-temp"><span id="currentTemp" class="sk">--</span><span class="deg" id="tempUnit">°C</span></div>
+                <p class="hero-cond sk" id="weatherDesc">Memuat…</p>
+                <div class="hero-meta">
+                    <span>Terasa <b id="feelsLike">--</b></span><span class="dot"></span>
+                    <span>Tertinggi <b id="todayMax">--</b></span><span class="dot"></span>
+                    <span>Terendah <b id="todayMin">--</b></span>
+                </div>
             </div>
-            <div id="searchResults" class="search-results"></div>
-        </div>
-    </section>
+            <div class="hero-right">
+                <div class="hero-icon anim" id="heroIcon"></div>
+                <p class="hero-summary sk" id="heroSummary">Mengambil data prakiraan terbaru…</p>
+            </div>
+        </section>
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="loading-spinner">
-            <div class="spinner"></div>
-            <p>Memuat data cuaca...</p>
-        </div>
-    </div>
+        <!-- ===== Detail cuaca ===== -->
+        <section class="stats reveal" aria-label="Detail cuaca saat ini">
+            <article class="stat card">
+                <header class="stat-head"><i data-icon="droplet"></i>Kelembapan</header>
+                <div class="stat-body">
+                    <div class="ring" id="humidityRing"><span id="humidity">--</span></div>
+                    <div class="stat-side"><small>Titik embun</small><b id="dewPoint">--</b></div>
+                </div>
+                <p class="stat-foot" id="humidityNote">--</p>
+            </article>
 
-    <!-- Main Content -->
-    <main class="main-content" id="mainContent" style="display: none;">
-        
-        <!-- Current Weather Hero -->
-        <section class="current-weather" id="currentWeather">
-            <div class="weather-hero">
-                <div class="weather-icon-large" id="weatherIconLarge"></div>
-                <div class="weather-info">
-                    <h2 id="cityName" class="city-name"></h2>
-                    <p id="currentDate" class="current-date"></p>
-                    <div class="temp-display">
-                        <span id="currentTemp" class="current-temp"></span>
-                        <span class="temp-unit">°C</span>
+            <article class="stat card">
+                <header class="stat-head"><i data-icon="wind"></i>Angin</header>
+                <div class="stat-body">
+                    <div class="compass">
+                        <span class="n">U</span><span class="e">T</span><span class="s">S</span><span class="w">B</span>
+                        <div class="compass-arrow" id="windArrow"></div>
                     </div>
-                    <p id="weatherDesc" class="weather-desc"></p>
+                    <div class="stat-value"><span id="windSpeed">--</span><small>km/j</small></div>
                 </div>
-            </div>
+                <p class="stat-foot" id="windNote">--</p>
+            </article>
 
-            <!-- Weather Details Grid -->
-            <div class="weather-details">
-                <div class="detail-card" id="detailFeelsLike">
-                    <span class="detail-icon">🌡️</span>
-                    <span class="detail-label">Terasa Seperti</span>
-                    <span class="detail-value" id="feelsLike">--</span>
+            <article class="stat card">
+                <header class="stat-head"><i data-icon="sun"></i>Indeks UV</header>
+                <div class="stat-body col">
+                    <div class="stat-value" id="uvIndex">--</div>
+                    <div class="meter uv"><span class="meter-dot" id="uvMarker"></span></div>
                 </div>
-                <div class="detail-card" id="detailHumidity">
-                    <span class="detail-icon">💧</span>
-                    <span class="detail-label">Kelembapan</span>
-                    <span class="detail-value" id="humidity">--</span>
-                </div>
-                <div class="detail-card" id="detailWind">
-                    <span class="detail-icon">💨</span>
-                    <span class="detail-label">Kecepatan Angin</span>
-                    <span class="detail-value" id="windSpeed">--</span>
-                </div>
-                <div class="detail-card" id="detailPressure">
-                    <span class="detail-icon">🔵</span>
-                    <span class="detail-label">Tekanan Udara</span>
-                    <span class="detail-value" id="pressure">--</span>
-                </div>
-                <div class="detail-card" id="detailUV">
-                    <span class="detail-icon">☀️</span>
-                    <span class="detail-label">Indeks UV</span>
-                    <span class="detail-value" id="uvIndex">--</span>
-                </div>
-                <div class="detail-card" id="detailVisibility">
-                    <span class="detail-icon">👁️</span>
-                    <span class="detail-label">Jarak Pandang</span>
-                    <span class="detail-value" id="visibility">--</span>
-                </div>
-            </div>
-        </section>
+                <p class="stat-foot" id="uvNote">--</p>
+            </article>
 
-        <!-- Hourly Forecast -->
-        <section class="forecast-section">
-            <h2 class="section-title">
-                <span class="section-icon">⏰</span>
-                Prakiraan Per Jam (24 Jam)
-            </h2>
-            <div class="hourly-scroll" id="hourlyForecast"></div>
-            
-            <!-- Hourly Temperature Chart -->
-            <div class="chart-container">
-                <h3 class="chart-title">📊 Grafik Suhu 24 Jam</h3>
-                <canvas id="hourlyChart"></canvas>
-            </div>
-        </section>
+            <article class="stat card">
+                <header class="stat-head"><i data-icon="umbrella"></i>Peluang Hujan</header>
+                <div class="stat-body col">
+                    <div class="stat-value"><span id="rainProb">--</span><small>%</small></div>
+                    <div class="bar big"><i id="rainBar"></i></div>
+                </div>
+                <p class="stat-foot" id="rainNote">--</p>
+            </article>
 
-        <!-- 7-Day Forecast -->
-        <section class="forecast-section">
-            <h2 class="section-title">
-                <span class="section-icon">📅</span>
-                Prakiraan 7 Hari ke Depan
-            </h2>
-            <div class="daily-forecast" id="dailyForecast"></div>
+            <article class="stat card">
+                <header class="stat-head"><i data-icon="gauge"></i>Tekanan Udara</header>
+                <div class="stat-body col">
+                    <div class="stat-value"><span id="pressure">--</span><small>hPa</small></div>
+                    <div class="meter pressure"><span class="meter-dot" id="pressureMarker"></span></div>
+                </div>
+                <p class="stat-foot" id="pressureNote">--</p>
+            </article>
 
-            <!-- Daily Temperature Range Chart -->
-            <div class="chart-container">
-                <h3 class="chart-title">📈 Grafik Suhu Mingguan</h3>
-                <canvas id="dailyChart"></canvas>
-            </div>
-        </section>
+            <article class="stat card">
+                <header class="stat-head"><i data-icon="eye"></i>Jarak Pandang</header>
+                <div class="stat-body col">
+                    <div class="stat-value"><span id="visibility">--</span><small>km</small></div>
+                    <div class="bar big vis"><i id="visBar"></i></div>
+                </div>
+                <p class="stat-foot" id="visibilityNote">--</p>
+            </article>
 
-        <!-- Sun & Moon -->
-        <section class="forecast-section">
-            <h2 class="section-title">
-                <span class="section-icon">🌅</span>
-                Matahari & Pencahayaan
-            </h2>
-            <div class="sun-moon-grid">
-                <div class="sun-card">
-                    <div class="sun-visual">
-                        <div class="sun-arc" id="sunArc">
-                            <div class="sun-dot" id="sunDot"></div>
-                        </div>
-                    </div>
+            <article class="stat card wide sun-card">
+                <header class="stat-head"><i data-icon="sunrise"></i>Matahari</header>
+                <div class="stat-body col">
+                    <svg class="sun-svg" viewBox="0 0 200 105" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="sunGrad" x1="0" x2="1">
+                                <stop offset="0" stop-color="#fb923c"/>
+                                <stop offset="1" stop-color="#fde047"/>
+                            </linearGradient>
+                        </defs>
+                        <line class="sun-horizon" x1="4" y1="95" x2="196" y2="95"/>
+                        <path class="sun-track" d="M20 95 A80 80 0 0 1 180 95"/>
+                        <path class="sun-progress" id="sunProgress" d="M20 95 A80 80 0 0 1 180 95"/>
+                        <circle class="sun-dot" id="sunDot" cx="20" cy="95" r="7"/>
+                    </svg>
                     <div class="sun-times">
-                        <div class="sun-time">
-                            <span class="sun-label">🌅 Terbit</span>
-                            <span class="sun-value" id="sunrise">--:--</span>
-                        </div>
-                        <div class="sun-time">
-                            <span class="sun-label">🌇 Terbenam</span>
-                            <span class="sun-value" id="sunset">--:--</span>
-                        </div>
-                    </div>
-                    <div class="daylight-info">
-                        <span>☀️ Durasi Siang: <strong id="daylightDuration">--</strong></span>
+                        <div><small>Terbit</small><b id="sunrise">--:--</b></div>
+                        <div class="center"><small>Durasi siang</small><b id="daylight">--</b></div>
+                        <div class="right"><small>Terbenam</small><b id="sunset">--:--</b></div>
                     </div>
                 </div>
-            </div>
+                <p class="stat-foot" id="sunNote">--</p>
+            </article>
         </section>
 
-        <!-- Explanation Section -->
-        <section class="forecast-section explanation-section">
-            <h2 class="section-title">
-                <span class="section-icon">📖</span>
-                Tentang Forecasting Cuaca
-            </h2>
-            <div class="explanation-grid">
-                <div class="explanation-card">
-                    <div class="explanation-icon">🛰️</div>
-                    <h3>Data Satelit & Stasiun</h3>
-                    <p>Data cuaca dikumpulkan dari ribuan stasiun cuaca, satelit, radar, dan balon cuaca di seluruh dunia. Data ini diproses oleh superkomputer untuk menghasilkan prakiraan akurat.</p>
+        <!-- ===== Prakiraan 7 hari ===== -->
+        <section class="reveal" id="forecast">
+            <div class="section-head">
+                <div>
+                    <h2>Prakiraan 7 Hari</h2>
+                    <p>Klik salah satu hari untuk melihat detail & grafik per jamnya</p>
                 </div>
-                <div class="explanation-card">
-                    <div class="explanation-icon">🤖</div>
-                    <h3>Model Numerik (NWP)</h3>
-                    <p>Numerical Weather Prediction menggunakan persamaan matematika kompleks untuk mensimulasikan atmosfer. Model seperti GFS, ECMWF, dan ICON mengolah jutaan data point setiap jam.</p>
+            </div>
+            <div class="days" id="dailyList"></div>
+            <div class="day-detail card" id="dayDetail"></div>
+        </section>
+
+        <!-- ===== Grafik interaktif ===== -->
+        <section class="chart-card card reveal">
+            <div class="section-head">
+                <div>
+                    <h2>Grafik Interaktif</h2>
+                    <p id="chartSubtitle">24 jam ke depan</p>
                 </div>
-                <div class="explanation-card">
-                    <div class="explanation-icon">📊</div>
-                    <h3>Ensemble Forecasting</h3>
-                    <p>Beberapa simulasi dijalankan dengan kondisi awal yang sedikit berbeda untuk mengukur ketidakpastian prakiraan. Semakin konsisten hasilnya, semakin akurat prakiraan tersebut.</p>
+                <div class="tabs" id="chartTabs" role="tablist">
+                    <span class="tab-ind"></span>
+                    <button class="active" data-metric="temp">Suhu</button>
+                    <button data-metric="rain">Hujan</button>
+                    <button data-metric="wind">Angin</button>
+                    <button data-metric="humidity">Kelembapan</button>
                 </div>
-                <div class="explanation-card">
-                    <div class="explanation-icon">🎯</div>
-                    <h3>Akurasi Prakiraan</h3>
-                    <p>Prakiraan 1-3 hari memiliki akurasi ~90%. Prakiraan 4-7 hari ~80%. Setelah 10 hari, akurasi menurun signifikan karena sifat kaotis atmosfer (Efek Kupu-kupu).</p>
+            </div>
+            <div class="chart-wrap">
+                <canvas id="mainChart" aria-label="Grafik prakiraan per jam"></canvas>
+                <div class="chart-tooltip" id="chartTooltip"></div>
+            </div>
+            <p class="chart-hint">Arahkan kursor atau sentuh grafik — atau klik kartu jam di bawah ini</p>
+            <div class="hourly" id="hourlyStrip"></div>
+        </section>
+
+        <!-- ===== Peta ===== -->
+        <section class="map-card card reveal" id="mapSection">
+            <div class="section-head">
+                <div>
+                    <h2>Peta Interaktif</h2>
+                    <p>Klik di mana saja pada peta untuk melihat cuaca di lokasi tersebut</p>
                 </div>
-                <div class="explanation-card">
-                    <div class="explanation-icon">🌍</div>
-                    <h3>Sumber Data: Open-Meteo</h3>
-                    <p>Website ini menggunakan <strong>Open-Meteo API</strong> yang menggabungkan data dari badan meteorologi nasional di seluruh dunia, memberikan prakiraan gratis dan akurat.</p>
+            </div>
+            <div id="map"></div>
+        </section>
+
+        <!-- ===== Edukasi ===== -->
+        <section class="learn reveal" id="learn">
+            <div class="section-head center">
+                <span class="eyebrow">Edukasi</span>
+                <h2>Bagaimana Prakiraan Cuaca Dibuat?</h2>
+                <p>Dari jutaan titik data hingga angka di layar Anda — pilih tiap tahap untuk mempelajarinya.</p>
+            </div>
+
+            <div class="steps" id="steps"></div>
+            <div class="step-panel card" id="stepPanel"></div>
+
+            <div class="unc card">
+                <div class="unc-head">
+                    <h3>Simulasi: Mengapa Prakiraan Jangka Panjang Kurang Pasti?</h3>
+                    <p>Geser slider untuk melihat bagaimana rentang ketidakpastian suhu maksimum melebar seiring bertambahnya hari — menggunakan data prakiraan asli lokasi Anda.</p>
                 </div>
-                <div class="explanation-card">
-                    <div class="explanation-icon">⚡</div>
-                    <h3>Real-Time Updates</h3>
-                    <p>Data diperbarui setiap jam dari model cuaca terbaru. Setiap kali Anda membuka halaman ini atau mencari kota baru, data terbaru akan dimuat secara otomatis.</p>
+                <div class="unc-top">
+                    <div>
+                        <span class="unc-lead" id="uncLead">+0 hari</span>
+                        <div class="unc-day" id="uncDay">Hari ini</div>
+                    </div>
+                    <div class="unc-kpis">
+                        <div class="kpi"><span>Prakiraan maks</span><b id="uncForecast">--</b></div>
+                        <div class="kpi"><span>Rentang mungkin</span><b id="uncRange">--</b></div>
+                        <div class="kpi"><span>Keandalan</span><b id="uncAcc">--</b></div>
+                    </div>
                 </div>
+                <div class="unc-track" id="uncTrack">
+                    <div class="unc-band" id="uncBand"></div>
+                    <div class="unc-marker" id="uncMarker"></div>
+                </div>
+                <div class="unc-scale"><span id="uncLo">--</span><span>Titik = anggota ensemble (ilustrasi)</span><span id="uncHi">--</span></div>
+                <div class="unc-slider">
+                    <input type="range" class="range" id="uncSlider" min="0" max="6" step="1" value="0" aria-label="Pilih hari prakiraan">
+                    <div class="unc-ticks"><span>Hari ini</span><span>+1</span><span>+2</span><span>+3</span><span>+4</span><span>+5</span><span>+6</span></div>
+                </div>
+                <p class="unc-note" id="uncNote"></p>
+                <p class="unc-disclaimer">*Rentang & tingkat keandalan adalah ilustrasi umum berdasarkan statistik verifikasi model global, bukan keluaran langsung model untuk lokasi ini.</p>
+            </div>
+
+            <div class="faq">
+                <details>
+                    <summary>Apa arti “peluang hujan 70%”?</summary>
+                    <p>Artinya, dari berbagai skenario model, sekitar 70% memprediksi hujan minimal 0,1 mm di lokasi tersebut pada periode itu. Bukan berarti 70% wilayah akan hujan, atau hujan turun selama 70% waktu.</p>
+                </details>
+                <details>
+                    <summary>Mengapa prakiraan bisa meleset?</summary>
+                    <p>Atmosfer bersifat kaotis: kesalahan kecil pada kondisi awal membesar seiring waktu (Efek Kupu-kupu). Selain itu, fenomena kecil seperti hujan lokal atau badai petir sering lebih kecil dari ukuran grid model, dan data observasi di lautan masih terbatas.</p>
+                </details>
+                <details>
+                    <summary>Dari mana data di situs ini berasal?</summary>
+                    <p>Data cuaca berasal dari Open-Meteo, yang memadukan model dari berbagai badan meteorologi (mis. ECMWF, NOAA GFS, DWD ICON) dan memilih model terbaik untuk tiap lokasi. Pencarian kota memakai Open-Meteo Geocoding, sedangkan peta memakai OpenStreetMap & CARTO.</p>
+                </details>
+                <details>
+                    <summary>Seberapa sering data diperbarui?</summary>
+                    <p>Model cuaca diperbarui beberapa kali sehari, sedangkan kondisi terkini diperbarui tiap 15 menit. Halaman ini otomatis memuat ulang data setiap 10 menit selama dibuka.</p>
+                </details>
+                <details>
+                    <summary>Apa itu Indeks UV?</summary>
+                    <p>Ukuran intensitas radiasi ultraviolet matahari pada skala 0–11+. Nilai 0–2 rendah, 3–5 sedang, 6–7 tinggi, 8–10 sangat tinggi, dan 11+ ekstrem. Di Indonesia, indeks UV siang hari sering mencapai 9–11.</p>
+                </details>
+                <details>
+                    <summary>Apa itu kode cuaca WMO?</summary>
+                    <p>Kode standar Organisasi Meteorologi Dunia (WMO) bernilai 0–99 untuk mengklasifikasikan kondisi cuaca, misalnya 0 = cerah, 3 = berawan, 61 = hujan ringan, dan 95 = badai petir. Ikon di situs ini dibuat berdasarkan kode tersebut.</p>
+                </details>
             </div>
         </section>
     </main>
 
-    <!-- Footer -->
     <footer class="footer">
-        <div class="footer-inner">
-            <p>🌤️ <strong>CuacaKu</strong> — Prakiraan Cuaca Interaktif Real-Time</p>
-            <p class="footer-sub">Data cuaca dari <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo API</a> · Geocoding dari <a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noopener">Open-Meteo Geocoding</a></p>
-            <p class="footer-copy">© 2026 CuacaKu. Dibuat dengan ❤️</p>
-        </div>
+        <p class="brand-sm">Cuaca<b>Ku</b></p>
+        <p>Data cuaca: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · Peta: <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a> &amp; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p>
+        <p class="footer-copy">© 2026 CuacaKu. Dibuat dengan HTML, CSS & JavaScript.</p>
     </footer>
 
-    <script src="script.js?v=2"></script>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <noscript><p style="text-align:center;padding:20px">Aktifkan JavaScript untuk melihat data cuaca.</p></noscript>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="script.js?v=4"></script>
 </body>
 </html>
